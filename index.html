@@ -198,14 +198,15 @@
     const darkMat = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 20 });
 
     // ── Custom Zocdoc Z shape ────────────────────────────────────────────────
-    // The bottom bar curves upward — that curve IS the smile.
-    // Outer path traced clockwise: top bar → diagonal → bottom bar (curved).
+    // Scaled to fill ~55% of the sphere face, matching the logo reference.
+    // The bottom bar uses a bezier curve arcing upward — that IS the smile.
+    // Path traced clockwise: top bar → diagonal → curved bottom bar.
     function makeZocdocShape() {
-      const W        = 0.55;   // half-width
-      const H        = 0.48;   // half-height
-      const sw       = 0.115;  // stroke half-thickness
-      const dw       = 0.13;   // diagonal corner offset
-      const smileUp  = 0.40;   // how high the bottom arcs (the smile!)
+      const W       = 0.95;  // half-width  (total Z width = 1.90)
+      const H       = 0.82;  // half-height (total Z height = 1.64)
+      const sw      = 0.19;  // stroke half-thickness (bar thickness = 0.38)
+      const dw      = 0.21;  // diagonal corner horizontal offset
+      const smile   = 0.62;  // how high the bottom curves up — bigger = more smile
 
       const s = new THREE.Shape();
       s.moveTo(-W,       H);              // 1  top-left outer
@@ -214,7 +215,7 @@
       s.lineTo(-W + dw, -(H - sw * 2));   // 4  diagonal → bottom-left inner
       s.lineTo( W,      -(H - sw * 2));   // 5  bottom-right inner  (notch right)
       s.lineTo( W,      -H);              // 6  bottom-right outer
-      s.quadraticCurveTo(0, -H + smileUp, -W, -H); // 7  CURVED bottom = smile 😊
+      s.quadraticCurveTo(0, -H + smile, -W, -H); // 7  CURVED SMILE BOTTOM 😊
       s.lineTo(-W,      -(H - sw * 2));   // 8  bottom-left inner
       s.lineTo( W - dw,  H - sw * 2);     // 9  diagonal → top-right inner
       s.lineTo(-W,       H - sw * 2);     // 10 top-left inner  (notch left)
@@ -223,32 +224,33 @@
     }
 
     const zGeo = new THREE.ExtrudeGeometry(makeZocdocShape(), {
-      depth: 0.22, bevelEnabled: true,
-      bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 3,
+      depth: 0.26, bevelEnabled: true,
+      bevelThickness: 0.022, bevelSize: 0.022, bevelSegments: 3,
     });
     zGeo.center();
     const zMesh = new THREE.Mesh(zGeo, darkMat);
-    zMesh.position.set(0, 0.04, 2.0);
+    zMesh.position.set(0, 0.06, 2.05);
     faceGroup.add(zMesh);
 
-    // ── Eyes (the ·Z· dots) ─────────────────────────────────────────────────
-    // Slightly flattened spheres — they blink and squint with the float bob.
-    const eyeMat  = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 30 });
+    // ── Eyes ·Z· — flanking the Z at diagonal midpoint height ───────────────
+    // In the logo, the dots sit left & right of the Z body at y ≈ 0 (center).
+    const eyeMat   = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 30 });
     const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
     function makeEye(xPos) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 20), eyeMat);
-      eye.position.set(xPos, 0.10, 2.16);
-      // White glint highlight
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), glintMat);
-      glint.position.set(0.07, 0.08, 0.14);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.20, 20, 20), eyeMat);
+      eye.position.set(xPos, 0.0, 2.18);
+      // White glint for that alive/shiny look
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), glintMat);
+      glint.position.set(0.08, 0.09, 0.17);
       eye.add(glint);
       faceGroup.add(eye);
       return eye;
     }
 
-    const dotL = makeEye(-0.74);
-    const dotR = makeEye( 0.74);
+    // Dots sit just outside the Z's half-width, flanking the diagonal
+    const dotL = makeEye(-1.10);
+    const dotR = makeEye( 1.10);
 
     // ─────────────────────────────────────────────────────────────────────────
     // CONFETTI
