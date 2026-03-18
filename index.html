@@ -76,15 +76,6 @@
       animation: popIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
     }
 
-    .subtitle {
-      font-size: clamp(15px, 2.4vw, 30px);
-      font-weight: 600;
-      color: #e6a800;
-      letter-spacing: 0.06em;
-      opacity: 0;
-      animation: fadeUp 0.6s ease 0.75s forwards;
-    }
-
     .message {
       font-size: clamp(13px, 1.2vw, 17px);
       font-weight: 400;
@@ -130,10 +121,10 @@
   <!-- ── Text overlay ─────────────────────────────────────── -->
   <div id="overlay">
     <div class="title">Goodbye! 👋</div>
-    <div class="subtitle">Zocdoc Design Team</div>
     <div class="message">
-      Thanks for all the pixels, the late-night crits, the Figma files,<br />
-      and every single laugh along the way. You're the best. 💛
+      It's been such a joy to work with and grow alongside you all.<br />
+      I can't wait to see what Zocdoc becomes — you're going to make<br />
+      it something truly special. 💛
     </div>
   </div>
 
@@ -148,9 +139,7 @@
   </script>
 
   <script type="module">
-    import * as THREE      from 'three';
-    import { FontLoader }  from 'three/addons/loaders/FontLoader.js';
-    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+    import * as THREE from 'three';
 
     // ─────────────────────────────────────────────────────────────────────────
     // RENDERER  (transparent canvas — CSS handles the background gradient)
@@ -205,42 +194,61 @@
     shadowMesh.position.y = -2.9;
     scene.add(shadowMesh);
 
-    // Face elements (always face camera) — positioned at z=2.15 in face-local space
-    const darkMat = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 10 });
+    // Face elements (always face camera)
+    const darkMat = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 20 });
 
-    // Left dot  ·
-    const dotL = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 16), darkMat);
-    dotL.position.set(-0.72, 0.08, 2.15);
-    faceGroup.add(dotL);
+    // ── Custom Zocdoc Z shape ────────────────────────────────────────────────
+    // The bottom bar curves upward — that curve IS the smile.
+    // Outer path traced clockwise: top bar → diagonal → bottom bar (curved).
+    function makeZocdocShape() {
+      const W        = 0.55;   // half-width
+      const H        = 0.48;   // half-height
+      const sw       = 0.115;  // stroke half-thickness
+      const dw       = 0.13;   // diagonal corner offset
+      const smileUp  = 0.40;   // how high the bottom arcs (the smile!)
 
-    // Right dot  ·
-    const dotR = dotL.clone();
-    dotR.position.set(0.72, 0.08, 2.15);
-    faceGroup.add(dotR);
+      const s = new THREE.Shape();
+      s.moveTo(-W,       H);              // 1  top-left outer
+      s.lineTo( W,       H);              // 2  top-right outer
+      s.lineTo( W,       H - sw * 2);     // 3  inner top-right
+      s.lineTo(-W + dw, -(H - sw * 2));   // 4  diagonal → bottom-left inner
+      s.lineTo( W,      -(H - sw * 2));   // 5  bottom-right inner  (notch right)
+      s.lineTo( W,      -H);              // 6  bottom-right outer
+      s.quadraticCurveTo(0, -H + smileUp, -W, -H); // 7  CURVED bottom = smile 😊
+      s.lineTo(-W,      -(H - sw * 2));   // 8  bottom-left inner
+      s.lineTo( W - dw,  H - sw * 2);     // 9  diagonal → top-right inner
+      s.lineTo(-W,       H - sw * 2);     // 10 top-left inner  (notch left)
+      s.closePath();
+      return s;
+    }
 
-    // Smile arc
-    const smileGeo = new THREE.TorusGeometry(0.52, 0.10, 8, 40, Math.PI);
-    const smile = new THREE.Mesh(smileGeo, darkMat.clone());
-    smile.position.set(0, -0.28, 2.12);
-    smile.rotation.z = Math.PI; // open side down = smile
-    faceGroup.add(smile);
+    const zGeo = new THREE.ExtrudeGeometry(makeZocdocShape(), {
+      depth: 0.22, bevelEnabled: true,
+      bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 3,
+    });
+    zGeo.center();
+    const zMesh = new THREE.Mesh(zGeo, darkMat);
+    zMesh.position.set(0, 0.04, 2.0);
+    faceGroup.add(zMesh);
 
-    // Z letter (loaded async, added to faceGroup when ready)
-    new FontLoader().load(
-      'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/fonts/helvetiker_bold.typeface.json',
-      (font) => {
-        const zGeo = new TextGeometry('Z', {
-          font, size: 1.05, depth: 0.22, curveSegments: 12,
-          bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.025, bevelSegments: 4,
-        });
-        zGeo.center();
-        const zMesh = new THREE.Mesh(zGeo, new THREE.MeshPhongMaterial({
-          color: 0x2d2d2d, shininess: 20,
-        }));
-        zMesh.position.set(0, 0.06, 2.0);
-        faceGroup.add(zMesh);
-      }
-    );
+    // ── Eyes (the ·Z· dots) ─────────────────────────────────────────────────
+    // Slightly flattened spheres — they blink and squint with the float bob.
+    const eyeMat  = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 30 });
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    function makeEye(xPos) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 20), eyeMat);
+      eye.position.set(xPos, 0.10, 2.16);
+      // White glint highlight
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), glintMat);
+      glint.position.set(0.07, 0.08, 0.14);
+      eye.add(glint);
+      faceGroup.add(eye);
+      return eye;
+    }
+
+    const dotL = makeEye(-0.74);
+    const dotR = makeEye( 0.74);
 
     // ─────────────────────────────────────────────────────────────────────────
     // CONFETTI
@@ -381,6 +389,21 @@
 
       // Face always looks at camera
       faceGroup.quaternion.copy(camera.quaternion);
+
+      // ── Eye animation: blink + happy squint ───────────────
+      // Squint more when floating up (= happy expression ^^)
+      const normalized = (floatY + 0.55) / 1.1;       // 0 at bottom, 1 at top
+      const squintY    = 0.95 - normalized * 0.32;     // 0.95 open → 0.63 squinty
+
+      // Blink: quick close & open every ~4 s
+      const blinkCycle = t % 4.2;
+      const blinkY = blinkCycle < 0.10 ? Math.max(0.04, 1 - blinkCycle * 10)
+                   : blinkCycle < 0.22 ? Math.min(1,    (blinkCycle - 0.10) * 8.5)
+                   : 1;
+
+      const eyeScaleY = squintY * blinkY;
+      dotL.scale.y = eyeScaleY;
+      dotR.scale.y = eyeScaleY;
 
       // Shadow follows orb, gets smaller/fainter when orb is high
       shadowMesh.scale.setScalar(1 - floatY * 0.08);
