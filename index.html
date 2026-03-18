@@ -12,34 +12,18 @@
     html, body {
       width: 100%; height: 100%;
       overflow: hidden;
-      background: #FFF9D6; /* cream fallback before Three.js mounts */
+      background: #FFF9D6;
       font-family: 'Fredoka', sans-serif;
     }
 
     canvas { display: block; }
 
-    /* Title at top, message at bottom — orb lives in the open middle */
     #overlay {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6vh 0 7vh;
+      position: fixed; inset: 0;
+      display: flex; align-items: flex-end; justify-content: center;
+      padding-bottom: 8vh;
       pointer-events: none;
       z-index: 10;
-    }
-
-    .title {
-      font-size: clamp(60px, 12vw, 190px);
-      font-weight: 700;
-      color: #2d2d2d;
-      letter-spacing: -0.02em;
-      line-height: 1;
-      opacity: 0;
-      transform: scale(0.8) translateY(-20px);
-      animation: popIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
     }
 
     .message {
@@ -50,12 +34,9 @@
       line-height: 1.9;
       max-width: 500px;
       opacity: 0;
-      animation: fadeUp 0.6s ease 1.2s forwards;
+      animation: fadeUp 0.8s ease 2.8s forwards;
     }
 
-    @keyframes popIn {
-      to { opacity: 1; transform: scale(1) translateY(0); }
-    }
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(14px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -65,7 +46,6 @@
 <body>
 
   <div id="overlay">
-    <div class="title">Goodbye</div>
     <div class="message">
       It's been such a joy to work with and grow alongside you all.<br />
       I can't wait to see what Zocdoc becomes — you're going to make<br />
@@ -83,7 +63,9 @@
   </script>
 
   <script type="module">
-    import * as THREE from 'three';
+    import * as THREE        from 'three';
+    import { FontLoader }    from 'three/addons/loaders/FontLoader.js';
+    import { TextGeometry }  from 'three/addons/geometries/TextGeometry.js';
 
     // ── Renderer ──────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -92,126 +74,120 @@
     document.body.appendChild(renderer.domElement);
 
     const scene  = new THREE.Scene();
-    scene.background = new THREE.Color(0xFFF9D6); // warm cream — matches CSS fallback
-    const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 200);
-    camera.position.set(0, 0, 15);
+    scene.background = new THREE.Color(0xFFF9D6); // warm cream
+
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+    camera.position.set(0, 0, 20);
 
     // ── Lights ────────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 2.2));
-    const sun = new THREE.DirectionalLight(0xfffbe0, 3.5);
-    sun.position.set(6, 10, 8);
-    scene.add(sun);
-    const fill = new THREE.PointLight(0x1FC8DB, 2.0, 40);
-    fill.position.set(-8, 2, 5);
-    scene.add(fill);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.6));
 
-    // ── Orb groups ────────────────────────────────────────────────────────────
-    // orbBody  → yellow sphere (spins freely)
-    // faceGroup → Z face elements (always face camera)
-    const orbBody   = new THREE.Group();
-    const faceGroup = new THREE.Group();
-    scene.add(orbBody);
-    scene.add(faceGroup);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 3.5);
+    keyLight.position.set(3, 8, 12);
+    scene.add(keyLight);
 
-    // Yellow sphere
-    orbBody.add(new THREE.Mesh(
-      new THREE.SphereGeometry(2.2, 64, 64),
-      new THREE.MeshPhongMaterial({ color: 0xFFE233, shininess: 55, specular: new THREE.Color(0xffffff) })
-    ));
+    const warmLight = new THREE.PointLight(0xFFD060, 5, 60);
+    warmLight.position.set(-4, 4, 10);
+    scene.add(warmLight);
 
-    // Ground shadow
-    const shadowMesh = new THREE.Mesh(
-      new THREE.CircleGeometry(1.8, 40),
-      new THREE.MeshBasicMaterial({ color: 0x2d2d2d, transparent: true, opacity: 0.09 })
+    const rimLight = new THREE.DirectionalLight(0xFFB800, 1.8);
+    rimLight.position.set(-5, -2, -8);
+    scene.add(rimLight);
+
+    // ── Word group (letters go in here so the whole word can rock together) ───
+    const wordGroup = new THREE.Group();
+    scene.add(wordGroup);
+    const letterMeshes = [];
+
+    // Materials — yellow front/back, dark charcoal sides & bevel (Zocdoc style)
+    const frontMat = new THREE.MeshPhongMaterial({
+      color:    0xFFE233,
+      shininess: 110,
+      specular:  new THREE.Color(0xffffff),
+    });
+    const sideMat = new THREE.MeshPhongMaterial({
+      color:    0x2d2d2d,
+      shininess: 40,
+    });
+
+    // ── Load font → build 3D letters ─────────────────────────────────────────
+    new FontLoader().load(
+      'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/fonts/helvetiker_bold.typeface.json',
+      (font) => {
+        const TEXT  = 'Goodbye';
+        const SIZE  = 2.2;    // letter height
+        const DEPTH = 0.55;   // extrusion depth
+        const GAP   = 0.22;   // extra spacing between letters
+
+        // Measure every character first so we can centre the whole word
+        const infos = TEXT.split('').map((char) => {
+          const geo = new TextGeometry(char, {
+            font, size: SIZE, height: DEPTH, curveSegments: 12,
+            bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.06, bevelSegments: 5,
+          });
+          geo.computeBoundingBox();
+          const bb = geo.boundingBox;
+          return {
+            geo,
+            w:  bb.max.x - bb.min.x,
+            ox: -bb.min.x,
+            oy: -(bb.min.y + (bb.max.y - bb.min.y) / 2),
+          };
+        });
+
+        const totalW = infos.reduce((s, { w }) => s + w, 0) + GAP * (TEXT.length - 1);
+        let x = -totalW / 2;
+
+        infos.forEach(({ geo, w, ox, oy }, i) => {
+          const mesh = new THREE.Mesh(geo, [frontMat, sideMat]);
+
+          // Start high above the viewport, slightly rotated
+          mesh.position.set(x + ox, oy + 20, 0);
+          mesh.rotation.z = (i % 2 === 0 ? 1 : -1) * 0.38;
+
+          mesh.userData = {
+            baseY: oy,
+            vy:    0,           // vertical velocity for spring
+            vr:    0,           // rotational velocity for spring
+            phase: i * 0.55,   // wave offset
+            delay: 0.05 + i * 0.12, // stagger start time
+          };
+
+          wordGroup.add(mesh);
+          letterMeshes.push(mesh);
+          x += w + GAP;
+        });
+      }
     );
-    shadowMesh.rotation.x = -Math.PI / 2;
-    shadowMesh.position.y = -2.9;
-    scene.add(shadowMesh);
-
-    // ── Canvas-drawn Zocdoc Z ─────────────────────────────────────────────────
-    // Drawn with Canvas 2D to match the logo exactly:
-    //   top bar → diagonal → bottom bar with quadratic smile curve.
-    // The canvas is transparent so only the dark Z pixels render.
-    function buildZTexture() {
-      const S  = 640;
-      const cx = S / 2;   // 320
-      const cy = S / 2;   // 320
-      const w  = 195;     // Z half-width   → total width  390 px (61% of canvas)
-      const h  = 175;     // Z half-height  → total height 350 px
-      const sw = 43;      // stroke half-thickness (bar height = 86 px ≈ 25% of Z height)
-      const dw = 48;      // diagonal corner horizontal offset
-      const sm = 165;     // smile: control point rise above the bottom edge
-
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = S;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#2d2d2d';
-
-      // Z outline — 10-point path (clockwise)
-      ctx.beginPath();
-      ctx.moveTo(cx - w,      cy - h);           // 1  top-left outer
-      ctx.lineTo(cx + w,      cy - h);           // 2  top-right outer
-      ctx.lineTo(cx + w,      cy - h + sw * 2);  // 3  inner top-right
-      ctx.lineTo(cx - w + dw, cy + h - sw * 2);  // 4  diagonal → bottom-left inner
-      ctx.lineTo(cx + w,      cy + h - sw * 2);  // 5  bottom-right inner  (notch)
-      ctx.lineTo(cx + w,      cy + h);           // 6  bottom-right outer
-      ctx.quadraticCurveTo(cx, cy + h - sm, cx - w, cy + h); // 7  SMILE CURVE 😊
-      ctx.lineTo(cx - w,      cy + h - sw * 2);  // 8  bottom-left inner
-      ctx.lineTo(cx + w - dw, cy - h + sw * 2);  // 9  diagonal → top-right inner
-      ctx.lineTo(cx - w,      cy - h + sw * 2);  // 10 top-left inner  (notch)
-      ctx.closePath();
-      ctx.fill();
-
-      return new THREE.CanvasTexture(canvas);
-    }
-
-    // Transparent plane carrying the Z texture — sits at sphere surface
-    const zPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.8, 3.8),
-      new THREE.MeshBasicMaterial({ map: buildZTexture(), transparent: true, alphaTest: 0.05 })
-    );
-    zPlane.position.z = 2.1;
-    faceGroup.add(zPlane);
-
-    // ── Eyes (·Z·) — separate 3D spheres so they can blink ───────────────────
-    // Positioned to match where the dots would sit in the canvas (flanking the Z).
-    const eyeMat   = new THREE.MeshPhongMaterial({ color: 0x2d2d2d, shininess: 30 });
-    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-
-    function makeEye(xPos) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 24), eyeMat);
-      eye.position.set(xPos, 0.02, 2.22);
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), glintMat);
-      glint.position.set(0.09, 0.10, 0.18);
-      eye.add(glint);
-      faceGroup.add(eye);
-      return eye;
-    }
-
-    // x ≈ ±1.5 matches the canvas dot positions scaled to the plane size
-    const dotL = makeEye(-1.50);
-    const dotR = makeEye( 1.50);
 
     // ── Confetti ──────────────────────────────────────────────────────────────
     const CONF_COLORS = [0xFFE233, 0x1FC8DB, 0xF27B5A, 0x4A7CF7, 0xFF87B2, 0x7EE8A2, 0xffffff];
     const confetti = [];
 
-    for (let i = 0; i < 160; i++) {
+    for (let i = 0; i < 150; i++) {
       const geo = Math.random() < 0.3
         ? new THREE.CircleGeometry(0.07 + Math.random() * 0.05, 8)
-        : new THREE.PlaneGeometry(0.16 + Math.random() * 0.08, 0.07 + Math.random() * 0.04);
+        : new THREE.PlaneGeometry(0.14 + Math.random() * 0.08, 0.07 + Math.random() * 0.04);
       const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
         color: CONF_COLORS[Math.floor(Math.random() * CONF_COLORS.length)],
-        side: THREE.DoubleSide,
+        side:  THREE.DoubleSide,
       }));
-      mesh.position.set((Math.random() - 0.5) * 28, 10 + Math.random() * 14, (Math.random() - 0.5) * 6);
-      mesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
+      mesh.position.set(
+        (Math.random() - 0.5) * 32,
+        10 + Math.random() * 16,
+        (Math.random() - 0.5) * 10
+      );
+      mesh.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2
+      );
       mesh.userData = {
-        vy: 0.028 + Math.random() * 0.042,
-        swayF: 0.6 + Math.random() * 1.6,
-        swayA: 0.007 + Math.random() * 0.013,
-        rx: (Math.random() - 0.5) * 0.05,
-        rz: (Math.random() - 0.5) * 0.07,
+        vy:    0.025 + Math.random() * 0.042,
+        swayF: 0.5   + Math.random() * 1.5,
+        swayA: 0.007 + Math.random() * 0.012,
+        rx:    (Math.random() - 0.5) * 0.05,
+        rz:    (Math.random() - 0.5) * 0.07,
         phase: Math.random() * Math.PI * 2,
       };
       scene.add(mesh);
@@ -236,35 +212,44 @@
     const HEART_COLORS = [0xFF87B2, 0xFFE233, 0xF27B5A, 0x1FC8DB];
     const hearts = [];
     for (let i = 0; i < 14; i++) {
-      const h = heartMesh(0.06 + Math.random() * 0.08, HEART_COLORS[i % HEART_COLORS.length]);
-      h.position.set((Math.random() - 0.5) * 20, -9 + Math.random() * 5, (Math.random() - 0.5) * 5);
-      h.userData = { vy: 0.012 + Math.random() * 0.022, swayF: 0.4 + Math.random() * 0.8, phase: Math.random() * Math.PI * 2 };
+      const h = heartMesh(0.06 + Math.random() * 0.09, HEART_COLORS[i % 4]);
+      h.position.set((Math.random() - 0.5) * 24, -12 + Math.random() * 6, (Math.random() - 0.5) * 6);
+      h.userData = {
+        vy:    0.012 + Math.random() * 0.022,
+        swayF: 0.4   + Math.random() * 0.8,
+        phase: Math.random() * Math.PI * 2,
+      };
       scene.add(h);
       hearts.push(h);
     }
 
     // ── Star sparkles ─────────────────────────────────────────────────────────
-    function starShape(r) {
-      const shape = new THREE.Shape();
+    function makeStarShape(r) {
+      const s = new THREE.Shape();
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
         const d = i % 2 === 0 ? r : r * 0.42;
-        i === 0 ? shape.moveTo(Math.cos(a) * d, Math.sin(a) * d)
-                : shape.lineTo(Math.cos(a) * d, Math.sin(a) * d);
+        i === 0
+          ? s.moveTo(Math.cos(a) * d, Math.sin(a) * d)
+          : s.lineTo(Math.cos(a) * d, Math.sin(a) * d);
       }
-      shape.closePath();
-      return shape;
+      s.closePath();
+      return s;
     }
 
     const SPARKLE_COLORS = [0xFFE233, 0xffffff, 0xFF87B2, 0x1FC8DB];
     const sparkles = [];
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 20; i++) {
       const m = new THREE.Mesh(
-        new THREE.ShapeGeometry(starShape(0.05 + Math.random() * 0.09)),
+        new THREE.ShapeGeometry(makeStarShape(0.06 + Math.random() * 0.10)),
         new THREE.MeshBasicMaterial({ color: SPARKLE_COLORS[i % 4], side: THREE.DoubleSide })
       );
-      m.position.set((Math.random() - 0.5) * 22, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 5);
-      m.userData = { phase: Math.random() * Math.PI * 2, speed: 0.6 + Math.random() * 1.2 };
+      m.position.set(
+        (Math.random() - 0.5) * 28,
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 8
+      );
+      m.userData = { phase: Math.random() * Math.PI * 2, speed: 0.6 + Math.random() * 1.3 };
       scene.add(m);
       sparkles.push(m);
     }
@@ -283,35 +268,26 @@
       requestAnimationFrame(tick);
       const t = clock.getElapsedTime();
 
-      mx += (tmx - mx) * 0.05;
-      my += (tmy - my) * 0.05;
+      mx += (tmx - mx) * 0.04;
+      my += (tmy - my) * 0.04;
 
-      // Orb: float, spin, squash & stretch
-      const floatY = Math.sin(t * 1.25) * 0.55;
-      orbBody.position.y  = floatY + 0.3;
-      faceGroup.position.y = floatY + 0.3;
+      // Letters: cascade drop with spring bounce, then gentle wave
+      letterMeshes.forEach((m) => {
+        if (t < m.userData.delay) return;
 
-      orbBody.rotation.y = t * 0.22;
-      orbBody.rotation.z = Math.sin(t * 0.75) * 0.12;
+        // Spring target = base position + slow sine wave
+        const waveY = m.userData.baseY + Math.sin(t * 1.4 + m.userData.phase) * 0.22;
+        m.userData.vy = m.userData.vy * 0.76 + (waveY - m.position.y) * 0.14;
+        m.position.y += m.userData.vy;
 
-      const stretch = 1 + Math.sin(t * 1.25) * 0.045;
-      orbBody.scale.set(1 / stretch, stretch, 1 / stretch);
+        // Rotation springs back to upright
+        m.userData.vr = m.userData.vr * 0.80 - m.rotation.z * 0.10;
+        m.rotation.z += m.userData.vr;
+      });
 
-      // Face always faces camera
-      faceGroup.quaternion.copy(camera.quaternion);
-
-      // Eyes: blink every ~4 s + happy squint when floating up
-      const normalized = (floatY + 0.55) / 1.1;
-      const squintY    = 0.95 - normalized * 0.32;
-      const bc = t % 4.2;
-      const blinkY = bc < 0.10 ? Math.max(0.04, 1 - bc * 10)
-                   : bc < 0.22 ? Math.min(1, (bc - 0.10) * 8.5)
-                   : 1;
-      dotL.scale.y = dotR.scale.y = squintY * blinkY;
-
-      // Shadow
-      shadowMesh.scale.setScalar(1 - floatY * 0.08);
-      shadowMesh.material.opacity = 0.09 - floatY * 0.015;
+      // Whole word gently rocks — shows off the 3D depth
+      wordGroup.rotation.y = Math.sin(t * 0.38) * 0.13 + mx * 0.22;
+      wordGroup.rotation.x = Math.sin(t * 0.28) * 0.04 - my * 0.06;
 
       // Confetti
       confetti.forEach((c) => {
@@ -319,7 +295,10 @@
         c.position.x += Math.sin(t * c.userData.swayF + c.userData.phase) * c.userData.swayA;
         c.rotation.x += c.userData.rx;
         c.rotation.z += c.userData.rz;
-        if (c.position.y < -11) { c.position.y = 14 + Math.random() * 4; c.position.x = (Math.random() - 0.5) * 28; }
+        if (c.position.y < -13) {
+          c.position.y = 16 + Math.random() * 4;
+          c.position.x = (Math.random() - 0.5) * 32;
+        }
       });
 
       // Hearts
@@ -328,19 +307,22 @@
         h.position.x += Math.sin(t * h.userData.swayF + h.userData.phase) * 0.005;
         h.rotation.z  = Math.sin(t * 0.9 + h.userData.phase) * 0.18;
         h.scale.setScalar(0.85 + Math.sin(t * 1.8 + h.userData.phase) * 0.15);
-        if (h.position.y > 11) { h.position.y = -10 + Math.random() * 2; h.position.x = (Math.random() - 0.5) * 20; }
+        if (h.position.y > 13) {
+          h.position.y = -12;
+          h.position.x = (Math.random() - 0.5) * 24;
+        }
       });
 
-      // Sparkles
+      // Sparkles twinkle
       sparkles.forEach((s) => {
-        s.scale.setScalar(0.5 + 0.5 * Math.abs(Math.sin(t * s.userData.speed + s.userData.phase)));
+        s.scale.setScalar(0.4 + 0.6 * Math.abs(Math.sin(t * s.userData.speed + s.userData.phase)));
         s.rotation.z = t * s.userData.speed * 0.5;
       });
 
       // Camera parallax
-      camera.position.x += (mx * 1.0 - camera.position.x) * 0.03;
-      camera.position.y += (-my * 0.6 + 0.2 - camera.position.y) * 0.03;
-      camera.lookAt(0, 0.2, 0);
+      camera.position.x += (mx * 1.2 - camera.position.x) * 0.03;
+      camera.position.y += (-my * 0.7 - camera.position.y) * 0.03;
+      camera.lookAt(0, 0, 0);
 
       renderer.render(scene, camera);
     }
