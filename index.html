@@ -12,11 +12,11 @@
     html, body {
       width: 100%; height: 100%;
       overflow: hidden;
-      background: radial-gradient(ellipse at 50% 30%, #fff9d6 0%, #ffffff 55%, #e8f5ff 100%);
+      background: #FFF9D6; /* cream fallback before Three.js mounts */
       font-family: 'Fredoka', sans-serif;
     }
 
-    canvas { position: fixed; inset: 0; display: block; z-index: 1; }
+    canvas { display: block; }
 
     /* Title at top, message at bottom — orb lives in the open middle */
     #overlay {
@@ -85,14 +85,14 @@
   <script type="module">
     import * as THREE from 'three';
 
-    // ── Renderer (transparent — CSS gradient shows through) ───────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // ── Renderer ──────────────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
-    renderer.setClearAlpha(0);
     document.body.appendChild(renderer.domElement);
 
     const scene  = new THREE.Scene();
+    scene.background = new THREE.Color(0xFFF9D6); // warm cream — matches CSS fallback
     const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 200);
     camera.position.set(0, 0, 15);
 
@@ -101,7 +101,9 @@
     const sun = new THREE.DirectionalLight(0xfffbe0, 3.5);
     sun.position.set(6, 10, 8);
     scene.add(sun);
-    scene.add(Object.assign(new THREE.PointLight(0x1FC8DB, 2.0, 40), { position: new THREE.Vector3(-8, 2, 5) }));
+    const fill = new THREE.PointLight(0x1FC8DB, 2.0, 40);
+    fill.position.set(-8, 2, 5);
+    scene.add(fill);
 
     // ── Orb groups ────────────────────────────────────────────────────────────
     // orbBody  → yellow sphere (spins freely)
